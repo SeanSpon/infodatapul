@@ -94,7 +94,12 @@ private fun App(
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = healthConnectManager.requestPermissionsContract(),
-    ) {
+    ) { grantedPermissions ->
+        permissionStatus = if (grantedPermissions.containsAll(healthConnectManager.permissions)) {
+            "All requested read permissions granted."
+        } else {
+            "Missing one or more Health Connect read permissions."
+        }
         refreshPermissionStatus()
     }
 
@@ -114,12 +119,40 @@ private fun App(
                     lastResult = lastResult,
                     error = error,
                     isSyncing = isSyncing,
-                    onRequestPermissions = { permissionLauncher.launch(healthConnectManager.permissions) },
+                    onRequestPermissions = {
+                        scope.launch {
+                            error = null
+                            when {
+                                !healthConnectManager.isAvailable() -> {
+                                    permissionStatus = "Health Connect is not available. Install or enable Health Connect, then reopen the app."
+                                    error = permissionStatus
+                                }
+                                healthConnectManager.hasAllPermissions() -> {
+                                    permissionStatus = "All requested read permissions granted."
+                                }
+                                else -> permissionLauncher.launch(healthConnectManager.permissions)
+                            }
+                        }
+                    },
                     onSyncToday = {
                         scope.launch {
                             error = null
                             isSyncing = true
                             lastResult = "Syncing…"
+                            if (!healthConnectManager.isAvailable()) {
+                                permissionStatus = "Health Connect is not available. Install or enable Health Connect, then reopen the app."
+                                error = permissionStatus
+                                lastResult = "Sync failed"
+                                isSyncing = false
+                                return@launch
+                            }
+                            if (!healthConnectManager.hasAllPermissions()) {
+                                permissionStatus = "Missing one or more Health Connect read permissions."
+                                lastResult = "Waiting for Health Connect permissions"
+                                isSyncing = false
+                                permissionLauncher.launch(healthConnectManager.permissions)
+                                return@launch
+                            }
                             runCatching {
                                 val payload = healthConnectManager.readToday()
                                 preview = syncClient.preview(payload)
