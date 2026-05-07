@@ -9,7 +9,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 class SyncClient(
-    private val json: Json = Json { prettyPrint = true; explicitNulls = false },
+    private val json: Json = Json { prettyPrint = true; explicitNulls = true },
 ) {
     fun preview(payload: HealthPayload): String = json.encodeToString(payload)
 

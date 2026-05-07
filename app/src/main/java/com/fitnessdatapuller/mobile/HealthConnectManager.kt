@@ -5,13 +5,24 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.FloorsClimbedRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
+import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.NutritionRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.RespiratoryRateRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -26,8 +37,18 @@ class HealthConnectManager(private val context: Context) {
     val permissions: Set<String> = setOf(
         HealthPermission.getReadPermission(StepsRecord::class),
         HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+        HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+        HealthPermission.getReadPermission(DistanceRecord::class),
+        HealthPermission.getReadPermission(FloorsClimbedRecord::class),
+        HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+        HealthPermission.getReadPermission(NutritionRecord::class),
+        HealthPermission.getReadPermission(HydrationRecord::class),
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(HeartRateRecord::class),
+        HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+        HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
+        HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+        HealthPermission.getReadPermission(RespiratoryRateRecord::class),
         HealthPermission.getReadPermission(WeightRecord::class),
     )
 
@@ -54,6 +75,19 @@ class HealthConnectManager(private val context: Context) {
                 metrics = setOf(
                     StepsRecord.COUNT_TOTAL,
                     ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
+                    TotalCaloriesBurnedRecord.ENERGY_TOTAL,
+                    DistanceRecord.DISTANCE_TOTAL,
+                    FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL,
+                    ExerciseSessionRecord.EXERCISE_DURATION_TOTAL,
+                    NutritionRecord.ENERGY_TOTAL,
+                    NutritionRecord.PROTEIN_TOTAL,
+                    NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL,
+                    NutritionRecord.TOTAL_FAT_TOTAL,
+                    NutritionRecord.SUGAR_TOTAL,
+                    NutritionRecord.DIETARY_FIBER_TOTAL,
+                    NutritionRecord.SODIUM_TOTAL,
+                    HydrationRecord.VOLUME_TOTAL,
+                    RestingHeartRateRecord.BPM_AVG,
                 ),
                 timeRangeFilter = range,
             ),
@@ -63,15 +97,44 @@ class HealthConnectManager(private val context: Context) {
         val activeCaloriesKcal = aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]
             ?.inKilocalories
             ?: 0.0
+        val workouts = readWorkouts(client, start, end)
+        val avgHr = readAverageHeartRate(client, range)
+        val restingHr = aggregate[RestingHeartRateRecord.BPM_AVG] ?: avgHr
+        val sources = collectSources(client, start, end)
 
         return HealthPayload(
             date = today.toString(),
             steps = steps,
             activeCalories = activeCaloriesKcal.roundTo(1),
+            totalCalories = aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories?.roundTo(1),
+            distanceMiles = aggregate[DistanceRecord.DISTANCE_TOTAL]?.inMiles?.roundTo(2),
+            floorsClimbed = aggregate[FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL]?.roundTo(1),
+            exerciseMinutes = aggregate[ExerciseSessionRecord.EXERCISE_DURATION_TOTAL]
+                ?.toMinutes()
+                ?.toDouble()
+                ?.roundTo(1),
+            workoutCount = workouts.size,
+            workouts = workouts,
+            nutrition = NutritionPayload(
+                calories = aggregate[NutritionRecord.ENERGY_TOTAL]?.inKilocalories?.roundTo(1),
+                proteinG = aggregate[NutritionRecord.PROTEIN_TOTAL]?.inGrams?.roundTo(1),
+                carbsG = aggregate[NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL]?.inGrams?.roundTo(1),
+                fatG = aggregate[NutritionRecord.TOTAL_FAT_TOTAL]?.inGrams?.roundTo(1),
+                sugarG = aggregate[NutritionRecord.SUGAR_TOTAL]?.inGrams?.roundTo(1),
+                fiberG = aggregate[NutritionRecord.DIETARY_FIBER_TOTAL]?.inGrams?.roundTo(1),
+                sodiumMg = aggregate[NutritionRecord.SODIUM_TOTAL]?.inMilligrams?.roundTo(1),
+            ),
+            hydrationLiters = aggregate[HydrationRecord.VOLUME_TOTAL]?.inLiters?.roundTo(2),
             sleepHours = readSleepHours(client, start, end).roundTo(2),
             weightLbs = readLatestWeightPounds(client, start, end)?.roundTo(1),
-            restingHr = readAverageHeartRate(client, range),
+            restingHr = restingHr,
+            avgHr = avgHr,
+            hrvRmssdMs = readAverageHrv(client, start, end)?.roundTo(1),
+            oxygenSaturationPct = readAverageOxygenSaturation(client, start, end)?.roundTo(1),
+            respiratoryRate = readAverageRespiratoryRate(client, start, end)?.roundTo(1),
+            sources = sources,
             sourceUpdatedAt = ZonedDateTime.now(zone).toInstant().toString(),
+            aiSummary = "Synced from Health Connect sources including Samsung Health/Galaxy wearables, Hevy, Cronometer, and any other connected apps that wrote today's permitted data.",
         )
     }
 
@@ -125,6 +188,101 @@ class HealthConnectManager(private val context: Context) {
         if (samples.isEmpty()) return null
         return samples.average().roundToLong()
     }
+
+    private suspend fun readWorkouts(
+        client: HealthConnectClient,
+        start: Instant,
+        end: Instant,
+    ): List<WorkoutPayload> {
+        return client.readRecords(
+            ReadRecordsRequest(
+                recordType = ExerciseSessionRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start, end),
+            ),
+        ).records.map { record ->
+            WorkoutPayload(
+                title = record.title,
+                exerciseType = record.exerciseType,
+                startTime = record.startTime.toString(),
+                endTime = record.endTime.toString(),
+                durationMinutes = (Duration.between(record.startTime, record.endTime).seconds / 60.0).roundTo(1),
+                source = record.metadata.dataOrigin.packageName,
+            )
+        }
+    }
+
+    private suspend fun readAverageHrv(
+        client: HealthConnectClient,
+        start: Instant,
+        end: Instant,
+    ): Double? {
+        val records = client.readRecords(
+            ReadRecordsRequest(
+                recordType = HeartRateVariabilityRmssdRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start, end),
+            ),
+        ).records
+        return records.map { it.heartRateVariabilityMillis }.averageOrNull()
+    }
+
+    private suspend fun readAverageOxygenSaturation(
+        client: HealthConnectClient,
+        start: Instant,
+        end: Instant,
+    ): Double? {
+        val records = client.readRecords(
+            ReadRecordsRequest(
+                recordType = OxygenSaturationRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start, end),
+            ),
+        ).records
+        return records.map { it.percentage.value }.averageOrNull()
+    }
+
+    private suspend fun readAverageRespiratoryRate(
+        client: HealthConnectClient,
+        start: Instant,
+        end: Instant,
+    ): Double? {
+        val records = client.readRecords(
+            ReadRecordsRequest(
+                recordType = RespiratoryRateRecord::class,
+                timeRangeFilter = TimeRangeFilter.between(start, end),
+            ),
+        ).records
+        return records.map { it.rate }.averageOrNull()
+    }
+
+    private suspend fun collectSources(
+        client: HealthConnectClient,
+        start: Instant,
+        end: Instant,
+    ): List<String> {
+        val sources = mutableSetOf<String>()
+        sources += readDataOrigins<ExerciseSessionRecord>(client, start, end)
+        sources += readDataOrigins<NutritionRecord>(client, start, end)
+        sources += readDataOrigins<HydrationRecord>(client, start, end)
+        sources += readDataOrigins<SleepSessionRecord>(client, start, end)
+        sources += readDataOrigins<HeartRateRecord>(client, start, end)
+        sources += readDataOrigins<StepsRecord>(client, start, end)
+        return sources.sorted()
+    }
+
+    private suspend inline fun <reified T : androidx.health.connect.client.records.Record> readDataOrigins(
+        client: HealthConnectClient,
+        start: Instant,
+        end: Instant,
+    ): Set<String> {
+        return client.readRecords(
+            ReadRecordsRequest(
+                recordType = T::class,
+                timeRangeFilter = TimeRangeFilter.between(start, end),
+                pageSize = 100,
+            ),
+        ).records.map { it.metadata.dataOrigin.packageName }.toSet()
+    }
+
+    private fun List<Double>.averageOrNull(): Double? = if (isEmpty()) null else average()
 
     private fun Double.roundTo(decimals: Int): Double {
         val scale = Math.pow(10.0, decimals.toDouble())
