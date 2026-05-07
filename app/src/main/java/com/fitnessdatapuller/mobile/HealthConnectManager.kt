@@ -12,7 +12,6 @@ import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
-import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -22,6 +21,8 @@ import kotlin.math.min
 import kotlin.math.roundToLong
 
 class HealthConnectManager(private val context: Context) {
+    private val healthConnectClient: HealthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
+
     val permissions: Set<String> = setOf(
         HealthPermission.getReadPermission(StepsRecord::class),
         HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
@@ -36,12 +37,12 @@ class HealthConnectManager(private val context: Context) {
 
     suspend fun hasAllPermissions(): Boolean {
         if (!isAvailable()) return false
-        return HealthConnectClient.getOrCreate(context).permissionController.getGrantedPermissions().containsAll(permissions)
+        return healthConnectClient.permissionController.getGrantedPermissions().containsAll(permissions)
     }
 
     suspend fun readToday(): HealthPayload {
         check(isAvailable()) { "Health Connect is not available on this device." }
-        val client = HealthConnectClient.getOrCreate(context)
+        val client = healthConnectClient
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val start = today.atStartOfDay(zone).toInstant()
