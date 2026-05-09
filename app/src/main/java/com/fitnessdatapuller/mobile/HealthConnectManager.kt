@@ -67,6 +67,7 @@ class HealthConnectManager(private val context: Context) {
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val start = today.atStartOfDay(zone).toInstant()
+        val sleepStart = today.minusDays(1).atStartOfDay(zone).toInstant()
         val end = Instant.now()
         val range = TimeRangeFilter.between(start, end)
 
@@ -125,7 +126,7 @@ class HealthConnectManager(private val context: Context) {
                 sodiumMg = aggregate[NutritionRecord.SODIUM_TOTAL]?.inMilligrams?.roundTo(1),
             ),
             hydrationLiters = aggregate[HydrationRecord.VOLUME_TOTAL]?.inLiters?.roundTo(2),
-            sleepHours = readSleepHours(client, start, end).roundTo(2),
+            sleepHours = readSleepHours(client, sleepStart, end, start).roundTo(2),
             weightLbs = readLatestWeightPounds(client, start, end)?.roundTo(1),
             restingHr = restingHr,
             avgHr = avgHr,
@@ -142,6 +143,7 @@ class HealthConnectManager(private val context: Context) {
         client: HealthConnectClient,
         start: Instant,
         end: Instant,
+        todayStart: Instant,
     ): Double {
         val records = client.readRecords(
             ReadRecordsRequest(
@@ -150,11 +152,13 @@ class HealthConnectManager(private val context: Context) {
             ),
         ).records
 
-        val seconds = records.sumOf { record ->
-            val overlapStart = max(record.startTime.epochSecond, start.epochSecond)
-            val overlapEnd = min(record.endTime.epochSecond, end.epochSecond)
-            max(0, overlapEnd - overlapStart)
-        }
+        val seconds = records
+            .filter { record -> record.endTime.isAfter(todayStart) }
+            .sumOf { record ->
+                val overlapStart = max(record.startTime.epochSecond, start.epochSecond)
+                val overlapEnd = min(record.endTime.epochSecond, end.epochSecond)
+                max(0, overlapEnd - overlapStart)
+            }
         return seconds / 3600.0
     }
 

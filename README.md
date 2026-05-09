@@ -34,43 +34,43 @@ Cumulative values such as steps, calories, distance, exercise duration, nutritio
 {
   "date": "YYYY-MM-DD",
   "steps": 28000,
-  "active_calories": 900,
-  "total_calories": 2450.5,
-  "distance_miles": 7.25,
-  "floors_climbed": 14,
-  "exercise_minutes": 65,
-  "workout_count": 1,
+  "activeCalories": 900,
+  "totalCalories": 2450.5,
+  "distanceMiles": 7.25,
+  "floorsClimbed": 14,
+  "exerciseMinutes": 65,
+  "workoutCount": 1,
   "workouts": [
     {
       "title": "Push day",
-      "exercise_type": 80,
-      "start_time": "ISO timestamp",
-      "end_time": "ISO timestamp",
-      "duration_minutes": 65,
+      "exerciseType": 80,
+      "startTime": "ISO timestamp",
+      "endTime": "ISO timestamp",
+      "durationMinutes": 65,
       "source": "app package"
     }
   ],
   "nutrition": {
     "calories": 2100,
-    "protein_g": 160,
-    "carbs_g": 225,
-    "fat_g": 70,
-    "sugar_g": 45,
-    "fiber_g": 30,
-    "sodium_mg": 2200
+    "proteinG": 160,
+    "carbsG": 225,
+    "fatG": 70,
+    "sugarG": 45,
+    "fiberG": 30,
+    "sodiumMg": 2200
   },
-  "hydration_liters": 2.6,
-  "sleep_hours": 7.4,
-  "sleep_quality": "unknown",
-  "weight_lbs": 153.2,
-  "resting_hr": 58,
-  "avg_hr": 72,
-  "hrv_rmssd_ms": 42.5,
-  "oxygen_saturation_pct": 97.8,
-  "respiratory_rate": 14.2,
+  "hydrationLiters": 2.6,
+  "sleepHours": 7.4,
+  "sleepQuality": "unknown",
+  "weightLbs": 153.2,
+  "restingHr": 58,
+  "avgHr": 72,
+  "hrvRmssdMs": 42.5,
+  "oxygenSaturationPct": 97.8,
+  "respiratoryRate": 14.2,
   "sources": ["com.sec.android.app.shealth"],
-  "source_updated_at": "ISO timestamp",
-  "ai_summary": "Synced from Health Connect sources including Samsung Health/Galaxy wearables, Hevy, Cronometer, and any other connected apps that wrote today's permitted data."
+  "sourceUpdatedAt": "ISO timestamp",
+  "aiSummary": "Synced from Health Connect sources including Samsung Health/Galaxy wearables, Hevy, Cronometer, and any other connected apps that wrote today's permitted data."
 }
 ```
 
@@ -78,8 +78,8 @@ Unit conversions performed by the app:
 
 - Calories are converted to kcal.
 - Weight is converted to pounds.
-- Sleep duration is converted to hours.
-- `resting_hr` uses Health Connect resting heart rate when present and falls back to the average heart-rate sample for today when a direct resting value is not available.
+- Sleep duration is converted to hours from sleep sessions that ended today, including the portion before midnight so overnight sleep does not sync as `0.0` just because it started yesterday.
+- `restingHr` uses Health Connect resting heart rate when present and falls back to the average heart-rate sample for today when a direct resting value is not available.
 - Missing optional values are still shown as `null` in the JSON preview and sync body so it is clear which connected source did not provide data for today.
 
 ## Run in Android Studio
